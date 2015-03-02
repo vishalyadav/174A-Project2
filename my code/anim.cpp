@@ -20,18 +20,29 @@ GLuint	texture_cube, texture_earth;
 GLint   uModelView, uProjection, uView,
 		uAmbient, uDiffuse, uSpecular, uLightPos, uShininess,
 		uTex, uEnableTex;
+#ifdef EMSCRIPTEN
+    TgaImage boredFace("boredb.tga");
+    TgaImage coolImage ("challenge.tga");
+    TgaImage earthImage("earth.tga");
+    TgaImage dirtImage("dirt1.tga");
+#else
+    TgaImage coolImage ("../my code/challenge.tga");
+    TgaImage earthImage("../my code/earth.tga");
+    TgaImage boredFace("../my code/boredb.tga");
+    TgaImage dirtImage("../my code/dirt1.tga");
+#endif
+
+int frames = 0;
+
 
 void init()
 {
 #ifdef EMSCRIPTEN
     GLuint program = LoadShaders( "vshader.glsl", "fshader.glsl" );								// Load shaders and use the resulting shader program
-    TgaImage coolImage ("challenge.tga");    
-    TgaImage earthImage("earth.tga");
 
 #else
 	GLuint program = LoadShaders( "../my code/vshader.glsl", "../my code/fshader.glsl" );		// Load shaders and use the resulting shader program
-    TgaImage coolImage ("../my code/challenge.tga");    
-    TgaImage earthImage("../my code/earth.tga");
+
 #endif
     glUseProgram(program);
 
@@ -318,23 +329,88 @@ void drawMidterm()
 
 // NEW THINGS NEW THINGS ///////////////////////////
 
+void changeTexture(GLuint &texture, TgaImage& img) {
+    glGenTextures( 1, &texture );
+    glBindTexture( GL_TEXTURE_2D, texture );
+    
+    glTexImage2D(GL_TEXTURE_2D, 0, 4, img.width, img.height, 0,
+                 (img.byteCount == 3) ? GL_BGR : GL_BGRA,
+                 GL_UNSIGNED_BYTE, img.data );
+    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT );
+    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT );
+    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+}
+
+void drawDudeHead() {
+    mvstack.push(model_view);
+    model_view *= Translate(0, 0, -1.4);
+    model_view *= RotateY(90);
+    changeTexture(texture_cube, boredFace);
+    drawCube();
+    changeTexture(texture_cube, coolImage);
+    model_view = mvstack.top(); mvstack.pop();
+}
+
+void drawDudeArms() {
+    mvstack.push(model_view);
+    model_view *= Translate(-.7, 0, -.5);
+    model_view *= RotateY(90);
+    model_view *= Scale(.2, .2, 1);
+    drawSphere();
+    model_view = mvstack.top(); mvstack.pop();
+    mvstack.push(model_view);
+    model_view *= Translate(.7, 0, -.5);
+    model_view *= RotateY(-90);
+    model_view *= Scale(.2, .2, 1);
+    drawSphere();
+    model_view = mvstack.top(); mvstack.pop();
+}
+
+void drawDudeLegs() {
+    mvstack.push(model_view);
+    model_view *= Translate(-.5, 0, .7);
+    model_view *= Scale(.3, .3, .6);
+    drawSphere();
+    model_view = mvstack.top(); mvstack.pop();
+    mvstack.push(model_view);
+    model_view *= Translate(.5, 0, .7);
+    model_view *= Scale(.3, .3, .6);
+    drawSphere();
+    model_view = mvstack.top(); mvstack.pop();
+}
+
 void drawDudeBody() {
+    mvstack.push(model_view);
+    model_view *= Scale(.5, .5, 1);
+    drawSphere();
+    model_view = mvstack.top(); mvstack.pop();
 }
 
 void drawDude() {
-    mvstack.push(model_view);
-    drawCube();
     drawDudeBody();
     drawDudeHead();
     drawDudeArms();
     drawDudeLegs();
 }
 
+void drawNewGround() {
+    mvstack.push(model_view);
+    model_view *= Translate(0, -1, 0);
+    model_view *= Scale(500, 1, 500);
+    changeTexture(texture_cube, dirtImage);
+    drawCube();
+    changeTexture(texture_cube, coolImage);
+    model_view = mvstack.top(); mvstack.pop();
+}
+
 vec4 unRotatedPoint = eye;
+int facezoom = 0;
 void display(void)
 {
+    frames++;
 	basis_id = 0;
-    glClearColor( .1, .1, .2, 1 );
+    glClearColor( .5, .8, .9, 1 );
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	set_color( .6, .6, .6 );
 	
@@ -343,21 +419,21 @@ void display(void)
 	model_view *= orientation;
     model_view *= Scale(zoom);												drawAxes(basis_id++);
 
-    // draw ground?
+    drawNewGround();
     drawDude();
-/*    drawCube();
-    model_view *= Translate(0, -2, 0);
-    model_view *= Scale(500, 1, 500);
-    drawCube();
-    float rotationBeginTime = 1;
-    float timeToRotate = 5;
+    float rotationBeginTime = 0;
+    float timeToRotate = 4;
     float rotationSceneTime = TIME - rotationBeginTime;
-    if( rotationSceneTime > 0 && rotationSceneTime < timeToRotate )
+    if( rotationSceneTime > 0 && rotationSceneTime < timeToRotate ) {
         eye = RotateY(360/timeToRotate * rotationSceneTime) * unRotatedPoint;
+        facezoom = 1;
+    }
     
-    if( 0 < TIME && TIME < rotationBeginTime )
-        unRotatedPoint = eye;
-   */
+    if (rotationSceneTime > timeToRotate+1 && facezoom == 1) {
+        eye = Translate(0, -6, 0) * RotateX(270) * unRotatedPoint;
+        facezoom = 0;
+    }
+ 
     glutSwapBuffers();
 }
 
